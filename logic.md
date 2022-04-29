@@ -1,3 +1,5 @@
+Behaviour: 1. When a person gets too close (sonar) to the house, an alarm is sounded (piezo).
+
 ```mermaid
 flowchart TD
     terminalStart([Start])
