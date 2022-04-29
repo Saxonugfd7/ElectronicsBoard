@@ -8,8 +8,7 @@ flowchart TD
     activatePiezo(write HIGH to piezoPin)
     ifDistanceLessThanThreshold{distanceRead < distanceThreshold>}
 
-    terminalStart --> thresholdSet
-    thresholdSet --> setPiezoPin
+    terminalStart --> thresholdSet --> setPiezoPin
     setPiezoPin --> currentDistanceReading
-    currentDistanceReading --> 
+    currentDistanceReading --> ifDistanceLessThanThreshold
 ```
