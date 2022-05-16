@@ -4,7 +4,7 @@ Behaviour: 1. When a person gets too close (sonar) to the house, an alarm is sou
 flowchart TD
     terminalStart([Start])
     terminalEnd([End])
-    thresholdSet(distanceThreshold = 50)
+    thresholdSet(distanceThreshold = 30)
     setPiezoPin(piezoPin = 22)
     currentDistanceReading(distanceRead = response from Sonar)
     activatePiezo(write HIGH to piezoPin)
