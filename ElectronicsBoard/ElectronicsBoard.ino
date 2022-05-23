@@ -179,9 +179,9 @@ void setup() {
   myservo.attach(9);  // attaches the servo on pin 9 to the servo object
 
 
-// Sonar - HC-SR04
-pinMode(trigPin, OUTPUT); // Sets the trigPin as an OUTPUT
-pinMode(echoPin, INPUT); // Sets the echoPin as an INPUT
+  // Sonar - HC-SR04
+  pinMode(trigPin, OUTPUT); // Sets the trigPin as an OUTPUT
+  pinMode(echoPin, INPUT); // Sets the echoPin as an INPUT
 }
 
 void loop() {
