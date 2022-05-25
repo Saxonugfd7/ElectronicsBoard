@@ -5,18 +5,19 @@
 // DC Motor & Motor Module - L298N
 #include <L298N.h>
 
-
-
 // Pin definition
 const unsigned int IN1 = 7;
 const unsigned int IN2 = 8;
 const unsigned int EN = 9;
 
 // Create one motor instance
-L298N motor(EN, IN1, IN2);
+L298N motor(IN1, IN2);
 
 // Moisture Sensor
 #define moisturePin A5
+
+// Line Sensor
+#define lineSensorPin 3    // Line Sensor (light). HIGH or LOW values.
 
 // GPS
 #include <SoftwareSerial.h>
@@ -48,94 +49,20 @@ Servo myservo;
 // Piezo Buzzer
 #define piezoPin 8
 
-// Bluetooth - nRF8001
+// Crash Sensor / Button
+#define crashSensor 7
+
+// Adafruit nRF8001 Module
 #include <SPI.h>
 #include "Adafruit_BLE_UART.h"
 
-#define ADAFRUITBLE_REQ 10
-#define ADAFRUITBLE_RDY 2
-#define ADAFRUITBLE_RST 9
-
-String command = "";
-
-Adafruit_BLE_UART uart = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
-/**************************************************************************/
-/*!
-    This function is called whenever select ACI events happen
-*/
-/**************************************************************************/
-void aciCallback(aci_evt_opcode_t event)
-{
-  switch (event)
-  {
-    case ACI_EVT_DEVICE_STARTED:
-      Serial.println(F("Advertising started"));
-      break;
-    case ACI_EVT_CONNECTED:
-      Serial.println(F("Connected!"));
-      break;
-    case ACI_EVT_DISCONNECTED:
-      Serial.println(F("Disconnected or advertising timed out"));
-      break;
-    default:
-      break;
-  }
-}
-
-/**************************************************************************/
-/*!
-    This function is called whenever data arrives on the RX channel
-*/
-/**************************************************************************/
-void rxCallback(uint8_t *buffer, uint8_t len)
-{
-  Serial.print(F("Received "));
-  Serial.print(len);
-  Serial.print(F(" bytes: "));
-  for (int i = 0; i < len; i++) {
-    //Serial.print((char)buffer[i]);
-    command += (char)buffer[i];
-  }
-
-
-  // MARK: Calculates if it's a !B command.
-
-  Serial.println("Command: " + command);
-
-  String newCommand = "";
-  newCommand += command.charAt(0);
-  newCommand += command.charAt(1);
-
-  Serial.println("Here it is!: " + newCommand + "<end>");
-
-  if (newCommand == "!B") {
-    Serial.println("Controller Command received.");
-  }
-
-
-
-
-  //TODO: get the code for each button and programme it.
-  // Each button has a press down state and a let go state.
-  // This will be useful to continue to run a command until the user lets go of a button.
-
-
-
-  Serial.print(F(" ["));
-
-  for (int i = 0; i < len; i++)
-  {
-    Serial.print(" 0x"); Serial.print((char)buffer[i], HEX);
-  }
-  Serial.println(F(" ]"));
-
-
-
-
-  command = "";
-  /* Echo the same data back! */
-  uart.write(buffer, len);
-}
+// Connect CLK/MISO/MOSI to hardware SPI
+// e.g. On UNO & compatible: CLK = 13, MISO = 12, MOSI = 11
+#define ADAFRUITBLE_REQ 40
+#define ADAFRUITBLE_RDY 2     // This should be an interrupt pin, on Uno thats #2 or #3
+#define ADAFRUITBLE_RST 41
+Adafruit_BLE_UART BTLEserial = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
+aci_evt_opcode_t laststatus = ACI_EVT_DISCONNECTED;
 
 void setup() {
   Serial.begin(9600);           // Open serial communications and wait for port to open:
@@ -149,6 +76,10 @@ void setup() {
     Serial.println("initialization failed!");
     while (1);
   }
+
+  // Real Time Clock (RTC)
+  rtc.begin(DateTime(F(__DATE__), F(__TIME__)));
+  
   Serial.println("initialization done.");
   logEvent("System Initialisation...");
 
@@ -158,10 +89,8 @@ void setup() {
   pinMode(ledGreen, OUTPUT);
 
   // Bluetooth - nRF8001
-  uart.setRXcallback(rxCallback);
-  uart.setACIcallback(aciCallback);
-  uart.setDeviceName("RyanBLE"); /* 7 characters max! */
-  uart.begin();
+  BTLEserial.setDeviceName("Mega"); /* 7 characters max! */
+  BTLEserial.begin();
 
   // GPS
   ss.begin(4800);
@@ -178,17 +107,160 @@ void setup() {
   // Servo
   myservo.attach(9);  // attaches the servo on pin 9 to the servo object
 
+  // Line Sensor
+  pinMode(lineSensorPin, OUTPUT);
 
   // Sonar - HC-SR04
   pinMode(trigPin, OUTPUT); // Sets the trigPin as an OUTPUT
   pinMode(echoPin, INPUT); // Sets the echoPin as an INPUT
+
+
+  //Built in LED
+  pinMode(13, OUTPUT);
+
+  // Crash Sensor / Button
+  pinMode(crashSensor, INPUT);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-
+  bluetoothConnectivity();
+  motorDC();
 }
 
+void motorDC() {
+  motor.forward();
+
+  // Alternative method:
+  // motor.run(L298N::FORWARD);
+
+  //print the motor status in the serial monitor
+  printSomeInfo();
+
+  delay(3000);
+
+  // Stop
+  motor.stop();
+
+  // Alternative method:
+  // motor.run(L298N::STOP);
+
+  printSomeInfo();
+
+  // Change speed
+  motor.setSpeed(255);
+
+  delay(3000);
+
+  // Tell the motor to go back (may depend by your wiring)
+  motor.backward();
+
+  // Alternative method:
+  // motor.run(L298N::BACKWARD);
+
+  printSomeInfo();
+
+  motor.setSpeed(120);
+
+  delay(3000);
+
+  // Stop
+  motor.stop();
+
+  printSomeInfo();
+
+  delay(3000);
+}
+
+/*
+Print some informations in Serial Monitor
+*/
+void printSomeInfo()
+{
+  Serial.print("Motor is moving = ");
+  Serial.print(motor.isMoving());
+  Serial.print(" at speed = ");
+  Serial.println(motor.getSpeed());
+}
+
+
+void bluetoothCommandReceived(String bleCommand) {
+  bleCommand.trim();
+  int bleCommandInt = bleCommand.toInt();
+
+
+  // TODO: Add responses to commands here.
+  // These two can be used for testing purposes.
+  switch (bleCommandInt) {
+    case 1:
+      digitalWrite(13, HIGH);
+      logEvent("BLE - LED Off");
+      break;
+    case 0:
+      digitalWrite(13, LOW);
+      logEvent("BLE - LED On");
+      break;
+  }
+}
+
+void bluetoothConnectivity() {
+  BTLEserial.pollACI();
+
+  // Ask what is our current status
+  aci_evt_opcode_t status = BTLEserial.getState();
+  // If the status changed....
+  if (status != laststatus) {
+    // print it out!
+    if (status == ACI_EVT_DEVICE_STARTED) {
+      Serial.println(F("* Advertising started"));
+    }
+    if (status == ACI_EVT_CONNECTED) {
+      Serial.println(F("* Connected!"));
+    }
+    if (status == ACI_EVT_DISCONNECTED) {
+      Serial.println(F("* Disconnected or advertising timed out"));
+    }
+    // OK set the last status change to this one
+    laststatus = status;
+  }
+
+  if (status == ACI_EVT_CONNECTED) {
+    // Lets see if there's any data for us!
+    if (BTLEserial.available()) {
+      Serial.print("* "); Serial.print(BTLEserial.available()); Serial.println(F(" bytes available from BTLE"));
+    }
+    String command = "";
+    // OK while we still have something to read, get a character and print it out
+    while (BTLEserial.available()) {
+      char c = BTLEserial.read();
+      //      Serial.print(c);
+      command += c;
+    }
+
+    if (command != "") {
+      bluetoothCommandReceived(command);
+    }
+
+
+    // Next up, see if we have any data to get from the Serial console
+
+    if (Serial.available()) {
+      // Read a line from Serial
+      Serial.setTimeout(100); // 100 millisecond timeout
+      String s = Serial.readString();
+
+      // We need to convert the line to bytes, no more than 20 at this time
+      uint8_t sendbuffer[20];
+      s.getBytes(sendbuffer, 20);
+      char sendbuffersize = min(20, s.length());
+
+      Serial.print(F("\n* Sending -> \"")); Serial.print((char *)sendbuffer); Serial.println("\"");
+
+      // write the data
+      BTLEserial.write(sendbuffer, sendbuffersize);
+    }
+  }
+}
 
 
 void logEvent(String dataToLog) {
