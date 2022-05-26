@@ -36,8 +36,8 @@ DateTime rightNow;  // used to store the current time.
 #define ledGreen A2
 
 // Sonar - HC-SR04
-#define echoPin 6 // attach pin D2 Arduino to pin Echo of HC-SR04
-#define trigPin A4 //attach pin D3 Arduino to pin Trig of HC-SR04
+#define echoPin 22 // attach pin D2 Arduino to pin Echo of HC-SR04
+#define trigPin 23 //attach pin D3 Arduino to pin Trig of HC-SR04
 
 //Potentiometer
 #define pot A3
@@ -47,13 +47,13 @@ DateTime rightNow;  // used to store the current time.
 Servo myservo;
 
 // Piezo Buzzer
-#define piezoPin 8
+#define piezoPin 5
 
 // Crash Sensor / Button
 #define crashSensor 7
 
 // Adafruit nRF8001 Module
-#include <SPI.h>
+//#include <SPI.h>
 #include "Adafruit_BLE_UART.h"
 
 // Connect CLK/MISO/MOSI to hardware SPI
@@ -70,6 +70,8 @@ void setup() {
     delay(1);                   // wait for serial port to connect. Needed for native USB port only
   }
 
+  pinMode(ADAFRUITBLE_REQ, OUTPUT);
+
   // SD Card initialisation
   Serial.print("Initializing SD card...");
   if (!SD.begin(10)) {
@@ -79,7 +81,7 @@ void setup() {
 
   // Real Time Clock (RTC)
   rtc.begin(DateTime(F(__DATE__), F(__TIME__)));
-  
+
   Serial.println("initialization done.");
   logEvent("System Initialisation...");
 
@@ -120,60 +122,92 @@ void setup() {
 
   // Crash Sensor / Button
   pinMode(crashSensor, INPUT);
+  SPI.begin();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   bluetoothConnectivity();
-  motorDC();
+//  motorDC();
+//  doorAlarm();
+//
+  delay(250);
 }
 
+int getSonarDistance() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  // Sets the trigPin HIGH (ACTIVE) for 10 microseconds
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  // Reads the echoPin, returns the sound wave travel time in microseconds
+  long duration = pulseIn(echoPin, HIGH);
+  // Calculating the distance
+  int distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
+  return distance;
+}
+
+void doorAlarm() {
+  int doorThreshold = 30;
+  int doorDistance = getSonarDistance();
+  if (doorDistance < doorThreshold) {
+    tone(piezoPin, 1000); // Send 1KHz sound signal...
+    delay(100);
+    tone(piezoPin, 500); // Send 1KHz sound signal...
+    delay(100);
+    logEvent("Alarm activated");
+  } else {
+    noTone(piezoPin);
+  }
+}
+
+
 void motorDC() {
-  motor.forward();
-
-  // Alternative method:
-  // motor.run(L298N::FORWARD);
-
-  //print the motor status in the serial monitor
-  printSomeInfo();
-
-  delay(3000);
-
-  // Stop
-  motor.stop();
-
-  // Alternative method:
-  // motor.run(L298N::STOP);
-
-  printSomeInfo();
-
-  // Change speed
-  motor.setSpeed(255);
-
-  delay(3000);
-
-  // Tell the motor to go back (may depend by your wiring)
-  motor.backward();
-
-  // Alternative method:
-  // motor.run(L298N::BACKWARD);
-
-  printSomeInfo();
-
-  motor.setSpeed(120);
-
-  delay(3000);
-
-  // Stop
-  motor.stop();
-
-  printSomeInfo();
-
-  delay(3000);
+  //  motor.forward();
+  //
+  //  // Alternative method:
+  //  // motor.run(L298N::FORWARD);
+  //
+  //  //print the motor status in the serial monitor
+  //  printSomeInfo();
+  //
+  //  delay(3000);
+  //
+  //  // Stop
+  //  motor.stop();
+  //
+  //  // Alternative method:
+  //  // motor.run(L298N::STOP);
+  //
+  //  printSomeInfo();
+  //
+  //  // Change speed
+  //  motor.setSpeed(255);
+  //
+  //  delay(3000);
+  //
+  //  // Tell the motor to go back (may depend by your wiring)
+  //  motor.backward();
+  //
+  //  // Alternative method:
+  //  // motor.run(L298N::BACKWARD);
+  //
+  //  printSomeInfo();
+  //
+  //  motor.setSpeed(120);
+  //
+  //  delay(3000);
+  //
+  //  // Stop
+  //  motor.stop();
+  //
+  //  printSomeInfo();
+  //
+  //  delay(3000);
 }
 
 /*
-Print some informations in Serial Monitor
+  Print some informations in Serial Monitor
 */
 void printSomeInfo()
 {
