@@ -76,51 +76,64 @@ void setup() {
   // Real Time Clock (RTC)
   rtc.begin(DateTime(F(__DATE__), F(__TIME__)));
 
-  Serial.println("initialization done.");
-  logEvent("System Initialisation...");
+  logEvent("System Initialisation Start");
 
   // Traffic Lights - LED Outputs
+  
   pinMode(ledRed, OUTPUT);
   pinMode(ledYellow, OUTPUT);
   pinMode(ledGreen, OUTPUT);
+  logEvent("Init - LEDs");
 
   // GPS
   ss.begin(4800);
+  logEvent("Init - GPS");
 
   //Potentiometer
   pinMode(pot, INPUT);
+  logEvent("Init - Potentiometer");
 
   // Piezo Buzzer
   pinMode(piezoPin, OUTPUT);
+  logEvent("Init - Piezo");
 
   // DC Motor & Motor Module - L298N
   motor.setSpeed(70);
-
+  logEvent("Init - DC Motor");
+  
   // Moisture Sensor
   pinMode(moisturePin, INPUT);
+  logEvent("Init - Moisture Pin");
 
   // Servo
   myservo.attach(9);  // attaches the servo on pin 9 to the servo object
+  logEvent("Init - Servo");
 
   // Line Sensor
   pinMode(lineSensorPin, OUTPUT);
+  logEvent("Init - Line Sensor");
 
   // Sonar - HC-SR04
   pinMode(trigPin, OUTPUT); // Sets the trigPin as an OUTPUT
   pinMode(echoPin, INPUT); // Sets the echoPin as an INPUT
+  logEvent("Init - Sonar");
 
   //Built in LED
   pinMode(13, OUTPUT);
+  logEvent("Init - Built-in LED");
 
   // Crash Sensor / Button
   pinMode(crashSensor, INPUT);
+  logEvent("Init - Crash Sensor");
   SPI.begin();
+
+  logEvent("System Initialisation Complete...");
 }
 
 void loop() {
   motorDC();
   doorAlarm();
-  //  remoteDecode();
+ // remoteDecode();
   delay(250);
 
 }
