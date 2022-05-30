@@ -52,17 +52,13 @@ Servo myservo;
 // Crash Sensor / Button
 #define crashSensor 7
 
-// Adafruit nRF8001 Module
-//#include <SPI.h>
-#include "Adafruit_BLE_UART.h"
+// SD Card
+#define SDpin 53
 
-// Connect CLK/MISO/MOSI to hardware SPI
-// e.g. On UNO & compatible: CLK = 13, MISO = 12, MOSI = 11
-#define ADAFRUITBLE_REQ 40
-#define ADAFRUITBLE_RDY 2     // This should be an interrupt pin, on Uno thats #2 or #3
-#define ADAFRUITBLE_RST 41
-Adafruit_BLE_UART BTLEserial = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
-aci_evt_opcode_t laststatus = ACI_EVT_DISCONNECTED;
+// IR Remote
+#include "Adafruit_NECremote.h"
+#define IRpin         24
+Adafruit_NECremote remote(IRpin);
 
 void setup() {
   Serial.begin(9600);           // Open serial communications and wait for port to open:
@@ -70,11 +66,9 @@ void setup() {
     delay(1);                   // wait for serial port to connect. Needed for native USB port only
   }
 
-  pinMode(ADAFRUITBLE_REQ, OUTPUT);
-
   // SD Card initialisation
   Serial.print("Initializing SD card...");
-  if (!SD.begin(10)) {
+  if (!SD.begin(SDpin)) {
     Serial.println("initialization failed!");
     while (1);
   }
@@ -90,15 +84,14 @@ void setup() {
   pinMode(ledYellow, OUTPUT);
   pinMode(ledGreen, OUTPUT);
 
-  // Bluetooth - nRF8001
-  BTLEserial.setDeviceName("Mega"); /* 7 characters max! */
-  BTLEserial.begin();
-
   // GPS
   ss.begin(4800);
 
   //Potentiometer
   pinMode(pot, INPUT);
+
+  // Piezo Buzzer
+  pinMode(piezoPin, OUTPUT);
 
   // DC Motor & Motor Module - L298N
   motor.setSpeed(70);
@@ -116,7 +109,6 @@ void setup() {
   pinMode(trigPin, OUTPUT); // Sets the trigPin as an OUTPUT
   pinMode(echoPin, INPUT); // Sets the echoPin as an INPUT
 
-
   //Built in LED
   pinMode(13, OUTPUT);
 
@@ -126,11 +118,88 @@ void setup() {
 }
 
 void loop() {
-  bluetoothConnectivity();
-//  motorDC();
-//  doorAlarm();
-//
+  motorDC();
+  doorAlarm();
+  //  remoteDecode();
   delay(250);
+
+}
+
+
+String remoteDecode() {
+  int c = remote.listen(5);  // seconds to wait before timing out!
+  // Or you can wait 'forever' for a valid code
+  //int c = remote.listen();  // Without a #, it means wait forever
+  if (c >= 0) {
+    switch (c) {
+
+        Serial.println("Code is :" + c);
+      // Top keys
+      case 70:
+        Serial.println("UP");
+        break;
+      case 21:
+        Serial.println("DOWN");
+        break;
+      case 68:
+        Serial.println("LEFT");
+
+        break;
+      case 67:
+        Serial.println("RIGHT");
+        break;
+      case 64:
+        Serial.println("OK");
+        break;
+      // Numbers
+      case 22:
+        Serial.println("1");
+        break;
+      case 25:
+        Serial.println("2");
+        break;
+      case 13:
+        Serial.println("3");
+        break;
+      case 12:
+        Serial.println("4");
+        break;
+      case 24:
+        Serial.println("5");
+        break;
+      case 94:
+        Serial.println("6");
+        break;
+      case 8:
+        Serial.println("7");
+        break;
+      case 28:
+        Serial.println("8");
+        break;
+      case 90:
+        Serial.println("9");
+        break;
+      case 82:
+        Serial.println("0");
+        break;
+
+      // # and *
+      case 66:
+        Serial.println("*");
+        break;
+      case 74:
+        Serial.println("#");
+        break;
+
+
+      // otherwise...
+
+      default:
+        Serial.println("Code is :" + c);
+        break;
+    }
+
+  }
 }
 
 int getSonarDistance() {
@@ -148,14 +217,17 @@ int getSonarDistance() {
 }
 
 void doorAlarm() {
-  int doorThreshold = 30;
+  int doorThreshold = 10;
   int doorDistance = getSonarDistance();
   if (doorDistance < doorThreshold) {
     tone(piezoPin, 1000); // Send 1KHz sound signal...
     delay(100);
     tone(piezoPin, 500); // Send 1KHz sound signal...
     delay(100);
-    logEvent("Alarm activated");
+    String distanceStr = String(doorDistance);
+    String thresholdStr = String(doorThreshold);
+    String eventToLog = "Alarm activated, " + distanceStr + "<" + thresholdStr;
+    logEvent(eventToLog);
   } else {
     noTone(piezoPin);
   }
@@ -217,84 +289,6 @@ void printSomeInfo()
   Serial.println(motor.getSpeed());
 }
 
-
-void bluetoothCommandReceived(String bleCommand) {
-  bleCommand.trim();
-  int bleCommandInt = bleCommand.toInt();
-
-
-  // TODO: Add responses to commands here.
-  // These two can be used for testing purposes.
-  switch (bleCommandInt) {
-    case 1:
-      digitalWrite(13, HIGH);
-      logEvent("BLE - LED Off");
-      break;
-    case 0:
-      digitalWrite(13, LOW);
-      logEvent("BLE - LED On");
-      break;
-  }
-}
-
-void bluetoothConnectivity() {
-  BTLEserial.pollACI();
-
-  // Ask what is our current status
-  aci_evt_opcode_t status = BTLEserial.getState();
-  // If the status changed....
-  if (status != laststatus) {
-    // print it out!
-    if (status == ACI_EVT_DEVICE_STARTED) {
-      Serial.println(F("* Advertising started"));
-    }
-    if (status == ACI_EVT_CONNECTED) {
-      Serial.println(F("* Connected!"));
-    }
-    if (status == ACI_EVT_DISCONNECTED) {
-      Serial.println(F("* Disconnected or advertising timed out"));
-    }
-    // OK set the last status change to this one
-    laststatus = status;
-  }
-
-  if (status == ACI_EVT_CONNECTED) {
-    // Lets see if there's any data for us!
-    if (BTLEserial.available()) {
-      Serial.print("* "); Serial.print(BTLEserial.available()); Serial.println(F(" bytes available from BTLE"));
-    }
-    String command = "";
-    // OK while we still have something to read, get a character and print it out
-    while (BTLEserial.available()) {
-      char c = BTLEserial.read();
-      //      Serial.print(c);
-      command += c;
-    }
-
-    if (command != "") {
-      bluetoothCommandReceived(command);
-    }
-
-
-    // Next up, see if we have any data to get from the Serial console
-
-    if (Serial.available()) {
-      // Read a line from Serial
-      Serial.setTimeout(100); // 100 millisecond timeout
-      String s = Serial.readString();
-
-      // We need to convert the line to bytes, no more than 20 at this time
-      uint8_t sendbuffer[20];
-      s.getBytes(sendbuffer, 20);
-      char sendbuffersize = min(20, s.length());
-
-      Serial.print(F("\n* Sending -> \"")); Serial.print((char *)sendbuffer); Serial.println("\"");
-
-      // write the data
-      BTLEserial.write(sendbuffer, sendbuffersize);
-    }
-  }
-}
 
 
 void logEvent(String dataToLog) {
